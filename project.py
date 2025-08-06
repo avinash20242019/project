@@ -1,5 +1,7 @@
 import streamlit as st
 from sympy import symbols, sympify, lambdify, diff
+import matplotlib.pyplot as plt
+import numpy as np
 
 x = symbols('x')
 
@@ -36,6 +38,26 @@ def newton_raphson_method(expr, x0, tol, max_iter):
         x0 = x1
     return x1, steps
 
+def style_text(text, color):
+    return f"<span style='color:{color}; font-weight:bold;'>{text}</span>"
+
+def plot_function(expr, root=None, a=-10, b=10):
+    f_np = lambdify(x, expr, "numpy")
+    X = np.linspace(a, b, 400)
+    Y = f_np(X)
+    
+    fig, ax = plt.subplots()
+    ax.plot(X, Y, label="f(x)", linewidth=2)
+    ax.axhline(0, color='black', linestyle='--', linewidth=1)
+    if root is not None:
+        ax.plot(root, f_np(root), 'ro', label=f"Root ≈ {root:.5f}")
+    ax.legend()
+    ax.set_title("Function Plot")
+    ax.set_xlabel("x")
+    ax.set_ylabel("f(x)")
+    ax.grid(True)
+    st.pyplot(fig)
+
 st.set_page_config(page_title="Numerical Methods", layout="centered")
 st.title("Numerical Methods App")
 
@@ -51,9 +73,6 @@ except:
 tol = st.number_input("Tolerance", min_value=1e-10, max_value=1.0, value=1e-6, step=1e-6, format="%.10f")
 max_iter = st.number_input("Maximum Iterations", min_value=1, max_value=1000, value=100)
 
-def style_text(text, color):
-    return f"<span style='color:{color}; font-weight:bold;'>{text}</span>"
-
 if method == "Bisection Method":
     a = st.number_input("Enter the lower bound a:", value=1.0)
     b = st.number_input("Enter the upper bound b:", value=2.0)
@@ -63,17 +82,13 @@ if method == "Bisection Method":
             st.error(steps[0])
         else:
             for i, a_, b_, c_, fc in steps:
-                if abs(fc) < tol:
-                    color = "green"
-                elif abs(fc) < 10 * tol:
-                    color = "orange"
-                else:
-                    color = "blue"
+                color = "green" if abs(fc) < tol else "orange" if abs(fc) < 10 * tol else "blue"
                 st.markdown(
                     style_text(f"Iteration {i}: a = {a_:.6f}, b = {b_:.6f}, c = {c_:.6f}, f(c) = {fc:.6f}", color),
                     unsafe_allow_html=True
                 )
             st.success(f"Approximated root: {result:.6f}")
+            plot_function(expr, root=result, a=a - 1, b=b + 1)
 
 elif method == "Newton-Raphson Method":
     x0 = st.number_input("Enter initial guess x₀:", value=1.5)
@@ -83,14 +98,11 @@ elif method == "Newton-Raphson Method":
             st.error(steps[0])
         else:
             for i, x0_, fx0, x1 in steps:
-                if abs(x1 - x0_) < tol:
-                    color = "green"
-                elif abs(x1 - x0_) < 10 * tol:
-                    color = "orange"
-                else:
-                    color = "blue"
+                color = "green" if abs(x1 - x0_) < tol else "orange" if abs(x1 - x0_) < 10 * tol else "blue"
                 st.markdown(
                     style_text(f"Iteration {i}: x₀ = {x0_:.6f}, f(x₀) = {fx0:.6f}, x₁ = {x1:.6f}", color),
                     unsafe_allow_html=True
                 )
             st.success(f"Approximated root: {result:.6f}")
+            plot_function(expr, root=result, a=x0 - 5, b=x0 + 5)
+
