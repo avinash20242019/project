@@ -1,87 +1,92 @@
 import streamlit as st
-from sympy import symbols, sympify, lambdify
-from sympy.calculus.util import continuous_domain
+from sympy import symbols, sympify, lambdify, diff
 import numpy as np
 
 x = symbols('x')
 
-# Evaluate function from user input
-def get_function(expr_str):
-    try:
-        expr = sympify(expr_str)
-        func = lambdify(x, expr, "math")
-        return expr, func
-    except Exception:
-        return None, None
+# --------------------------
+# Numerical Method Functions
+# --------------------------
 
-# Bisection Method
-def bisection_method(func, a, b, tol, max_iter):
+def bisection_method(func_expr, a, b, tol, max_iter):
+    f = lambdify(x, func_expr, 'numpy')
     steps = []
-    if func(a) * func(b) >= 0:
-        return "Invalid interval (same signs).", []
+    if f(a) * f(b) >= 0:
+        return None, ["Bisection method fails. f(a) and f(b) must have opposite signs."]
     
     for i in range(max_iter):
         c = (a + b) / 2
-        steps.append((i+1, a, b, c, func(c)))
-        if abs(func(c)) < tol:
-            break
-        elif func(a) * func(c) < 0:
+        steps.append(f"Iteration {i+1}: a = {a:.6f}, b = {b:.6f}, c = {c:.6f}, f(c) = {f(c):.6f}")
+        if abs(f(c)) < tol or (b - a) / 2 < tol:
+            return c, steps
+        if f(c) * f(a) < 0:
             b = c
         else:
             a = c
     return c, steps
 
-# Newton-Raphson Method
-def newton_raphson(func_expr, func, a, tol, max_iter):
+def newton_raphson_method(func_expr, x0, tol, max_iter):
+    f = lambdify(x, func_expr, 'numpy')
+    df = lambdify(x, diff(func_expr, x), 'numpy')
     steps = []
-    dfunc = lambdify(x, func_expr.diff(x), "math")
-    
+
     for i in range(max_iter):
-        f_val = func(a)
-        d_val = dfunc(a)
-        if d_val == 0:
-            return "Derivative is zero. Cannot proceed.", steps
-        a_new = a - f_val / d_val
-        steps.append((i+1, a, f_val, d_val, a_new))
-        if abs(f_val) < tol:
-            break
-        a = a_new
-    return a, steps
+        fx = f(x0)
+        dfx = df(x0)
+        if dfx == 0:
+            return None, [f"Derivative zero at x = {x0}. Cannot continue."]
+        x1 = x0 - fx / dfx
+        steps.append(f"Iteration {i+1}: x = {x0:.6f}, f(x) = {fx:.6f}, f'(x) = {dfx:.6f}, next x = {x1:.6f}")
+        if abs(x1 - x0) < tol:
+            return x1, steps
+        x0 = x1
+    return x1, steps
 
-# Streamlit Interface
-st.title("Numerical Methods: Bisection & Newton-Raphson")
+# --------------------------
+# Streamlit UI
+# --------------------------
 
-method = st.selectbox("Choose a Method", ["Bisection Method", "Newton-Raphson Method"])
-equation_input = st.text_input("Enter an equation in x (e.g., x**3 - 4*x - 9):")
+st.set_page_config(page_title="Numerical Methods App", layout="centered")
+st.title("📐 Numerical Methods Solver")
+st.markdown("Solve nonlinear equations using **Bisection** or **Newton-Raphson** method.")
 
-if equation_input:
-    expr, func = get_function(equation_input)
-    if not expr:
-        st.error("Invalid equation. Please try again.")
-    else:
-        if method == "Bisection Method":
-            a = st.number_input("Enter left bound (a):", value=1.0)
-            b = st.number_input("Enter right bound (b):", value=2.0)
-        else:
-            a = st.number_input("Enter initial guess (a):", value=1.0)
+# Input common to both methods
+method = st.selectbox("Choose a method", ["Bisection Method", "Newton-Raphson Method"])
+equation = st.text_input("Enter the equation f(x) =", value="x**3 - x - 2")
+tol = st.number_input("Tolerance", value=1e-6, format="%.1e")
+max_iter = st.number_input("Maximum Iterations", value=20, step=1)
 
-        tol = st.number_input("Enter tolerance (e.g. 0.0001):", value=0.0001)
-        max_iter = st.number_input("Maximum number of iterations:", value=50, step=1)
+try:
+    expr = sympify(equation)
+    st.latex(f"f(x) = {expr}")
+except Exception as e:
+    st.error("Invalid function. Please enter a valid Python expression like `x**3 - x - 2`.")
+    st.stop()
 
-        if st.button("Run"):
-            if method == "Bisection Method":
-                result, steps = bisection_method(func, a, b, tol, int(max_iter))
-                if isinstance(result, str):
-                    st.error(result)
-                else:
-                    st.success(f"Root found: {result}")
-                    st.write("Iterations:")
-                    st.dataframe(steps, use_container_width=True)
-            else:
-                result, steps = newton_raphson(expr, func, a, tol, int(max_iter))
-                if isinstance(result, str):
-                    st.error(result)
-                else:
-                    st.success(f"Root found: {result}")
-                    st.write("Iterations:")
-                    st.dataframe(steps, use_container_width=True)
+# Method-specific input
+if method == "Bisection Method":
+    col1, col2 = st.columns(2)
+    with col1:
+        a = st.number_input("Enter lower bound a", value=1.0)
+    with col2:
+        b = st.number_input("Enter upper bound b", value=2.0)
+    if st.button("Solve"):
+        root, steps = bisection_method(expr, a, b, tol, int(max_iter))
+        if root is not None:
+            st.success(f"Estimated Root: {root:.6f}")
+        for step in steps:
+            st.write(step)
+
+elif method == "Newton-Raphson Method":
+    x0 = st.number_input("Enter initial guess x₀", value=1.5)
+    if st.button("Solve"):
+        root, steps = newton_raphson_method(expr, x0, tol, int(max_iter))
+        if root is not None:
+            st.success(f"Estimated Root: {root:.6f}")
+        for step in steps:
+            st.write(step)
+
+# Footer
+st.markdown("---")
+st.caption("Made with ❤️ using Streamlit by [Avinash](https://github.com/avinash20242019)")
+
